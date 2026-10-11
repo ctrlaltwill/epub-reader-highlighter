@@ -288,6 +288,19 @@ button.epub-tb-btn:disabled {
 .epub-bg-ctl {
 	gap: 0;
 }
+.epub-width-ctl input[type="range"] {
+	flex: 1;
+	margin: 0 10px 0 0;
+	accent-color: var(--interactive-accent);
+	cursor: pointer;
+}
+.epub-panel-value {
+	min-width: 44px;
+	text-align: right;
+	font-size: 13px;
+	color: var(--text-muted);
+	font-variant-numeric: tabular-nums;
+}
 
 /* ---- Search results: page number on the left, excerpt with the hit bolded ---- */
 .epub-search-item {

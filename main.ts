@@ -145,6 +145,22 @@ function hotkeyLabel(combo: string): string {
 		.join(Platform.isMacOS ? "" : "+");
 }
 
+const DEFAULT_PAGE_WIDTH = 800;
+const MIN_PAGE_WIDTH = 400;
+const MAX_PAGE_WIDTH = 1600;
+const PAGE_WIDTH_STEP = 20;
+const FULL_PAGE_WIDTH = 0;
+const PAGE_WIDTH_FULL_STOP = MAX_PAGE_WIDTH + PAGE_WIDTH_STEP;
+
+function widthToSlider(width: number): number {
+	if (width <= 0) return PAGE_WIDTH_FULL_STOP;
+	return Math.min(Math.max(width, MIN_PAGE_WIDTH), MAX_PAGE_WIDTH);
+}
+
+function sliderToWidth(value: number): number {
+	return value >= PAGE_WIDTH_FULL_STOP ? FULL_PAGE_WIDTH : value;
+}
+
 // Global reading preferences, remembered across books and sessions.
 interface ReadingPrefs {
 	language: string;
@@ -152,6 +168,7 @@ interface ReadingPrefs {
 	customColor: string;
 	fontFamily: string;
 	fontSize: number;
+	pageWidth: number;
 	// Default highlight color ("" = first preset; set after HIGHLIGHT_COLORS
 	// exists, which is declared below DEFAULT_DATA).
 	highlightColor: string;
@@ -256,7 +273,7 @@ interface PluginData {
 
 const DEFAULT_DATA: PluginData = {
 	books: {},
-	prefs: { language: "auto", bgTheme: "gray", customColor: "#ffffff", fontFamily: "", fontSize: 20, highlightColor: "" },
+	prefs: { language: "auto", bgTheme: "gray", customColor: "#ffffff", fontFamily: "", fontSize: 20, pageWidth: DEFAULT_PAGE_WIDTH, highlightColor: "" },
 	seenGuide: false,
 };
 
@@ -3700,6 +3717,7 @@ class EpubView extends FileView {
 	customColor = "#ffffff";
 	fontFamily = "";
 	fontSize = 20;
+	pageWidth = DEFAULT_PAGE_WIDTH;
 	filePath = "";
 	fontsLoaded = false;
 	// Fixed visual pagination (Apple Books style): the whole book is
@@ -3759,6 +3777,7 @@ class EpubView extends FileView {
 		this.customColor = prefs.customColor;
 		this.fontFamily = prefs.fontFamily;
 		this.fontSize = prefs.fontSize;
+		this.pageWidth = prefs.pageWidth ?? DEFAULT_PAGE_WIDTH;
 		this.lastColor = prefs.highlightColor || HIGHLIGHT_COLORS[0].value;
 		this.contentEl.empty();
 		// empty() removed any open popup/menu nodes; drop their stale references.
@@ -4013,6 +4032,30 @@ class EpubView extends FileView {
 
 				// Background — name left, color dots right (white center = selected),
 				// spread so the first and last dots align with the other controls.
+				const widthRow = menu.createDiv({ cls: "epub-panel-row" });
+				widthRow.createSpan({ cls: "epub-panel-name", text: tr("页宽", "Page width", "頁寬", "Larghezza pagina") });
+				const widthCtl = widthRow.createDiv({ cls: "epub-panel-ctl epub-width-ctl" });
+				const widthSlider = widthCtl.createEl("input", {
+					attr: {
+						type: "range",
+						min: `${MIN_PAGE_WIDTH}`,
+						max: `${PAGE_WIDTH_FULL_STOP}`,
+						step: `${PAGE_WIDTH_STEP}`,
+					},
+				});
+				widthSlider.value = `${widthToSlider(this.pageWidth)}`;
+				const widthLabel = (width: number) => (width > 0 ? `${width}` : tr("最大", "Max", "最大", "Max"));
+				const widthValue = widthCtl.createSpan({ cls: "epub-panel-value", text: widthLabel(this.pageWidth) });
+				widthSlider.addEventListener("input", () => {
+					widthValue.setText(widthLabel(sliderToWidth(Number(widthSlider.value))));
+				});
+				widthSlider.addEventListener("change", () => {
+					this.pageWidth = sliderToWidth(Number(widthSlider.value));
+					this.applyPageWidth();
+					this.savePrefs();
+					this.onResize();
+				});
+
 				const bgRow = menu.createDiv({ cls: "epub-panel-row" });
 				bgRow.createSpan({ cls: "epub-panel-name", text: tr("背景", "Background", "背景", "Sfondo") });
 				const bgCtl = bgRow.createDiv({ cls: "epub-panel-ctl epub-bg-ctl" });
@@ -4125,6 +4168,7 @@ class EpubView extends FileView {
 		this.container = this.contentEl.createDiv({
 			attr: { style: "flex: 1 1 auto; min-height: 0; width: 100%; overflow: auto;" },
 		});
+		this.applyPageWidth();
 
 		// Register document-level listeners once (arrows / undo without focus, and
 		// dismissing the color popup on an outside click). registerDomEvent
@@ -4541,6 +4585,14 @@ class EpubView extends FileView {
 		}
 	}
 
+	applyPageWidth() {
+		this.container?.setCssStyles({
+			maxWidth: this.pageWidth > 0 ? `${this.pageWidth}px` : "none",
+			marginLeft: "auto",
+			marginRight: "auto",
+		});
+	}
+
 	// Apply the saved font family + size to the current rendition. Called from
 	// applyTheme, so it re-applies on every (re)render.
 	applyFont() {
@@ -4557,6 +4609,7 @@ class EpubView extends FileView {
 			customColor: this.customColor,
 			fontFamily: this.fontFamily,
 			fontSize: this.fontSize,
+			pageWidth: this.pageWidth,
 			highlightColor: this.lastColor,
 			customHlHistory: this.plugin.data.prefs.customHlHistory ?? [],
 			highlightHotkey: this.plugin.data.prefs.highlightHotkey,
